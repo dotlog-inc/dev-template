@@ -1,0 +1,93 @@
+[tools]
+node = "22"
+pnpm = "9"
+python = "3.12"
+uv = "latest"
+terraform = "1.9"
+
+[env]
+_.file = { path = ".env", optional = true }
+
+[tasks.dev]
+description = "全サービスを docker compose で起動"
+run = "docker compose up --build"
+
+[tasks.down]
+description = "停止 (ボリュームも削除)"
+run = "docker compose down -v"
+
+[tasks.stop]
+description = "停止 (ボリュームは保持)"
+run = "docker compose down"
+
+[tasks.logs]
+description = "ログを追う"
+run = "docker compose logs -f"
+
+[tasks.install]
+description = "両アプリの依存をインストール"
+depends = ["web:install", "api:install"]
+
+[tasks."web:install"]
+dir = "apps/web"
+run = "pnpm install"
+
+[tasks."api:install"]
+dir = "apps/api"
+run = "uv sync"
+
+[tasks."web:dev"]
+description = "Next.js を単独起動"
+dir = "apps/web"
+run = "pnpm dev"
+
+[tasks."api:dev"]
+description = "FastAPI を単独起動"
+dir = "apps/api"
+run = "uv run uvicorn app.main:app --reload --host 0.0.0.0 --port 8000"
+
+[tasks."api:migrate"]
+description = "Alembic マイグレーションを最新まで適用"
+dir = "apps/api"
+run = "uv run alembic upgrade head"
+
+[tasks."api:revision"]
+description = "Alembic 新規マイグレーション作成 (mise run api:revision -- -m 'msg')"
+dir = "apps/api"
+run = "uv run alembic revision --autogenerate"
+
+[tasks.lint]
+description = "全アプリの lint"
+depends = ["web:lint", "api:lint"]
+
+[tasks."web:lint"]
+dir = "apps/web"
+run = "pnpm lint"
+
+[tasks."api:lint"]
+dir = "apps/api"
+run = ["uv run ruff check .", "uv run mypy app"]
+
+[tasks.format]
+description = "全アプリのフォーマット"
+depends = ["web:format", "api:format"]
+
+[tasks."web:format"]
+dir = "apps/web"
+run = "pnpm format"
+
+[tasks."api:format"]
+dir = "apps/api"
+run = ["uv run ruff format .", "uv run ruff check --fix ."]
+
+[tasks."tf:init"]
+dir = "infra/terraform"
+run = "terraform init"
+
+[tasks."tf:plan"]
+dir = "infra/terraform"
+run = "terraform plan"
+
+[tasks."tf:apply"]
+dir = "infra/terraform"
+run = "terraform apply"
