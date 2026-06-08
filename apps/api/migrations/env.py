@@ -2,10 +2,10 @@ from logging.config import fileConfig
 
 from alembic import context
 from sqlalchemy import engine_from_config, pool
+from sqlmodel import SQLModel
 
-from app import models  # noqa: F401  (テーブル定義を import して metadata に登録)
-from app.config import settings
-from app.db import Base
+from src.config import settings
+from src.models import *  # noqa: F403  (テーブル定義を import して SQLModel.metadata に登録)
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
@@ -13,7 +13,7 @@ config.set_main_option("sqlalchemy.url", settings.database_url)
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
-target_metadata = Base.metadata
+target_metadata = SQLModel.metadata
 
 
 def run_migrations_offline() -> None:
