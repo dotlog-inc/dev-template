@@ -1,0 +1,20 @@
+experimental_monorepo_root = true
+
+[monorepo]
+config_roots = ["apps/web", "apps/api", "infra"]
+
+[settings]
+experimental = true
+
+[tasks.setup]
+description = "全サブプロジェクトのセットアップ"
+depends = ["//apps/web:setup", "//apps/api:setup", "//infra:setup"]
+
+[tasks.check]
+alias = "qa"
+description = "全サブプロジェクトの品質チェックを実行"
+depends = ["//apps/web:check", "//apps/api:check", "//infra:check"]
+
+[tasks."dev:up"]
+description = "web・api を並列起動"
+run = "mise run //apps/web:dev & mise run //apps/api:dev & wait"

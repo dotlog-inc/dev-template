@@ -1,0 +1,70 @@
+# apps/web/mise.toml
+
+[tools]
+# NOTE: Dockerfile.dev の node:22-alpine と整合させること
+node = "22"
+pnpm = "9"
+
+[tasks.setup]
+description = "依存関係のインストールと環境変数の設定"
+run = """
+  pnpm install
+  if [ ! -f .env.local ]; then
+    if [ -f .env.example ]; then
+      cp .env.example .env.local
+      echo "✓ .env.local ファイルを作成しました。"
+    fi
+  else
+    echo "✓ .env.local ファイルは既に存在します。"
+  fi
+"""
+
+[tasks.dev]
+description = "Next.js 開発サーバーを起動"
+run = "pnpm dev"
+
+[tasks.build]
+description = "プロダクションビルド"
+run = "pnpm build"
+
+[tasks.start]
+description = "プロダクションサーバーを起動"
+depends = [":build"]
+run = "pnpm start"
+
+[tasks.lint]
+description = "ESLint でコードチェック"
+run = "pnpm lint"
+
+[tasks.typecheck]
+description = "TypeScript の型チェック"
+run = "pnpm run typecheck"
+
+[tasks.format]
+description = "Prettier でコードをフォーマット"
+run = "pnpm run format"
+
+[tasks."format:check"]
+description = "Prettier でフォーマットチェック（変更なし）"
+run = "pnpm run format:check"
+
+[tasks.check]
+alias = "qa"
+description = "lint・型チェック・フォーマットチェックを実行"
+depends = [":lint", ":typecheck", ":format:check"]
+
+[tasks.clean]
+description = "ビルド成果物とキャッシュを削除"
+run = """
+  rm -rf .next
+  rm -rf node_modules/.cache
+  echo "✓ クリーンアップ完了"
+"""
+
+[tasks."clean:all"]
+description = "node_modules を含めて完全クリーンアップ"
+run = """
+  rm -rf .next node_modules
+  rm -f pnpm-lock.yaml
+  echo "✓ 完全クリーンアップ完了。mise run setup を実行してください。"
+"""

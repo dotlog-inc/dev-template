@@ -1,0 +1,47 @@
+# infra/mise.toml
+
+[tools]
+# NOTE: terraform/backend.tf の required_version (>= 1.9) と整合させること
+terraform = "1.9"
+
+[tasks.setup]
+description = "Terraform 作業ディレクトリを初期化"
+depends = [":init"]
+
+[tasks.check]
+alias = "qa"
+description = "Terraform のフォーマットと設定を検証"
+depends = [":format:check", ":validate"]
+
+[tasks.init]
+description = "Terraform を初期化"
+dir = "terraform"
+run = "terraform init"
+
+[tasks.format]
+description = "Terraform ファイルをフォーマット"
+dir = "terraform"
+run = "terraform fmt -recursive"
+
+[tasks."format:check"]
+description = "Terraform ファイルのフォーマットをチェック（変更なし）"
+dir = "terraform"
+run = "terraform fmt -recursive -check"
+
+[tasks.validate]
+description = "Terraform 設定を検証"
+depends = [":init"]
+dir = "terraform"
+run = "terraform validate"
+
+[tasks.plan]
+description = "Terraform plan を実行"
+depends = [":init"]
+dir = "terraform"
+run = "terraform plan"
+
+[tasks.apply]
+description = "Terraform apply を実行"
+depends = [":init"]
+dir = "terraform"
+run = "terraform apply"
