@@ -48,8 +48,8 @@ mise run dev
 立ち上がったら:
 
 - Web:        http://localhost:3000
-- API docs:   http://localhost:8000/docs
-- API health: http://localhost:8000/health
+- API docs:   http://localhost:8080/docs
+- API health: http://localhost:8080/health
 
 ## 初回マイグレーション
 
@@ -95,7 +95,7 @@ cd apps/api
 cp .env.example .env   # DATABASE_URL を localhost に書き換え済み
 uv sync
 uv run alembic upgrade head
-uv run uvicorn app.main:app --reload
+uv run fastapi dev src/main.py
 
 # Web (別ターミナル)
 cd apps/web
