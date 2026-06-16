@@ -1,0 +1,87 @@
+# apps/api/mise.toml
+
+[tools]
+# NOTE: Dockerfile.dev の python:3.12-slim と整合させること
+python = "3.12"
+uv = "latest"
+
+[settings]
+python.uv_venv_auto = "create|source"
+
+[env]
+UV_PYTHON = { value = "{{ tools.python.path }}", tools = true }
+
+[tasks.setup]
+description = "依存関係のインストールと環境変数の設定"
+run = """
+  uv sync
+  if [ ! -f .env ]; then
+    if [ -f .env.example ]; then
+      cp .env.example .env
+      echo "✓ .env ファイルを作成しました。"
+    fi
+  else
+    echo "✓ .env ファイルは既に存在します。"
+  fi
+"""
+
+[tasks.dev]
+description = "FastAPI 開発サーバーを起動（ホットリロード有効）"
+run = "uv run fastapi dev app/main.py"
+
+[tasks.start]
+description = "プロダクションサーバーを起動"
+run = "uv run fastapi run app/main.py"
+
+[tasks.test]
+description = "pytest でテストを実行"
+run = "uv run pytest"
+
+[tasks.lint]
+description = "ruff でコードチェック"
+run = "uv run ruff check ."
+
+[tasks.typecheck]
+description = "mypy で型チェック"
+run = "uv run mypy ."
+
+[tasks.format]
+description = "ruff でコードフォーマット"
+run = "uv run ruff format ."
+
+[tasks."format:check"]
+description = "ruff でフォーマットチェック（変更なし）"
+run = "uv run ruff format --check ."
+
+[tasks.check]
+alias = "qa"
+description = "lint・型チェック・テストを実行"
+depends = [":lint", ":typecheck", ":test"]
+
+[tasks."db:migrate"]
+description = "マイグレーションを実行"
+run = "PYTHONPATH=. uv run alembic upgrade head"
+
+[tasks."db:migrate:generate"]
+description = "マイグレーションファイルを自動生成 (引数: message)"
+run = "PYTHONPATH=. uv run alembic revision --autogenerate -m"
+
+[tasks."db:migrate:rollback"]
+description = "マイグレーションを1つ戻す"
+run = "PYTHONPATH=. uv run alembic downgrade -1"
+
+[tasks.clean]
+description = "キャッシュを削除"
+run = """
+  find . -type d -name "__pycache__" -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
+  rm -rf .pytest_cache .ruff_cache .mypy_cache
+  echo "✓ クリーンアップ完了"
+"""
+
+[tasks."clean:all"]
+description = ".venv を含めて完全クリーンアップ"
+run = """
+  find . -type d -name "__pycache__" -not -path "./.venv/*" -exec rm -rf {} + 2>/dev/null || true
+  rm -rf .pytest_cache .ruff_cache .mypy_cache .venv
+  echo "✓ 完全クリーンアップ完了。mise run setup を実行してください。"
+"""
