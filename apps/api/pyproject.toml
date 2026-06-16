@@ -2,11 +2,10 @@
 name = "api"
 version = "0.1.0"
 description = "FastAPI backend"
-requires-python = ">=3.12"
+requires-python = ">=3.14"
 dependencies = [
-    "fastapi>=0.115",
-    "uvicorn[standard]>=0.32",
-    "sqlalchemy>=2.0",
+    "fastapi[standard]>=0.115",
+    "sqlmodel>=0.0.37",
     "psycopg[binary]>=3.2",
     "alembic>=1.13",
     "pydantic-settings>=2.6",
@@ -14,30 +13,85 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "ruff>=0.7",
-    "mypy>=1.13",
+    # NOTE: ruff の select = ["ALL"] は新ルール追加で lint が壊れ得るため互換リリースに固定する
+    "ruff~=0.15.4",
+    "pyright>=1.1",
+    "pytest>=8.0",
 ]
 
 [tool.uv]
 package = false
 
+# ---------------------------------------------------------------------------
+# Pytest
+# ---------------------------------------------------------------------------
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+# ---------------------------------------------------------------------------
+# Ruff
+# ---------------------------------------------------------------------------
 [tool.ruff]
-line-length = 100
-target-version = "py312"
+line-length = 120
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    ".pytest_cache",
+    ".ruff_cache",
+]
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B", "UP", "N", "SIM"]
-ignore = []
+select = ["ALL"]
+ignore = [
+    # ---- docstring ----
+    "D1",    # docstring 未記述を許容
+    "D203",  # D211 と競合するため除外（クラス前空行なし）
+    "D212",  # D213 と競合するため除外（要約を2行目に）
+    "D400",  # 最初の行をピリオドで終わらせる必要なし
+    "D415",  # 最初の行の終端文字を強制しない
+    # ---- スタイル ----
+    "RUF002", # 日本語コメント中の全角文字を許容
+    "RUF003", # 日本語コメント中の全角文字を許容
+    "COM812", # ruff format と競合するため除外
+    "ISC001", # ruff format と競合するため除外
+    # ---- TODO / FIXME ----
+    "TD",    # TODO の著者・リンク強制を無効化（issue 管理側でトラッキング）
+    "FIX",   # TODO/FIXME コメントの存在を警告しない
+    "ERA001", # コメントアウトされたコード検出を無効化
+    # ---- 型アノテーション ----
+    "ANN",   # 型アノテーションは pyright に任せる
+    "TC",    # SQLAlchemy の Mapped 型は実行時に解決されるため型専用 import に倒さない
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = [
+    "S101",    # テストでの assert を許容
+    "PLR2004", # テストでのマジック値を許容
+]
+"migrations/**/*.py" = [
+    "INP001",  # Alembic マイグレーションは名前空間パッケージのため __init__.py 不要
+    "D",       # 自動生成されるマイグレーションの docstring 体裁は強制しない
+]
 
 [tool.ruff.format]
 quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
 
-[tool.mypy]
-python_version = "3.12"
-strict = true
-plugins = []
-exclude = ["migrations/"]
-
-[[tool.mypy.overrides]]
-module = "alembic.*"
-ignore_missing_imports = true
+# ---------------------------------------------------------------------------
+# Pyright
+# ---------------------------------------------------------------------------
+[tool.pyright]
+pythonVersion = "3.14"
+pythonPlatform = "Linux"
+venvPath = "."
+venv = ".venv"
+typeCheckingMode = "strict"              # 最も厳格な型チェック
+exclude = ["migrations/versions/", ".venv"]  # 自動生成の versions のみ除外（env.py は型チェック対象に残す）
+reportMissingImports = true
+reportMissingTypeStubs = false
+reportUnusedImport = true
+reportUnusedVariable = true
+reportUntypedFunctionDecorator = false   # FastAPI のデコレータに対応
+reportUnusedFunction = false             # FastAPI の exception_handler デコレータ等に対応
