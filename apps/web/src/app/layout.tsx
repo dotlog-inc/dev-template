@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "dev-template",
-  description: "Next.js + FastAPI + Postgres + Terraform monorepo",
+  title: "組織メモ",
+  description: "組織で共有するメモと、メモについて聞けるAI",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
