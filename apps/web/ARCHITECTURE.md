@@ -23,7 +23,7 @@ App Router 時代の Next.js は、かつてフロントエンドで別途必要
 
 ```
             ┌──────────────────────┐
-            │       ブラウザ        │  "use client" は末端2ファイルのみ
+            │       ブラウザ        │  "use client" は末端コンポーネントのみ
             └──────┬───────▲───────┘
         ページ要求 /│       │HTML/RSC      ┌─ 画像PUT (署名URL) ─→ GCS
         Action呼出 ▼│       │              │
@@ -31,23 +31,25 @@ App Router 時代の Next.js は、かつてフロントエンドで別途必要
             │  Next.js (App Router) │ ──────┘
             │  ・Server Component   │
             │  ・Server Action      │   GCP IDトークン + X-User-Id
-            │  ・/api/chat (中継)   │ ─────────────────┐
+            │  ・/api/chat ※次フェーズ│ ───────────────┐
             └──────────────────────┘                   ▼
                                               ┌────────────────┐
-                                              │  バックエンドAPI │── Vertex AI
+                                              │  バックエンドAPI │── Vertex AI ※次フェーズ
                                               │  (Cloud Run)    │── DB
                                               └────────────────┘
 ```
 
-登場人物は4つ。ブラウザ、Next.jsサーバー、バックエンドAPI (以下BE)、GCS。Vertex AI (Gemini) はBEの背後にいて、フロントエンドからは見えない。
+登場人物は4つ。ブラウザ、Next.jsサーバー、バックエンドAPI (以下BE)、GCS。
+
+> ※次フェーズ: AIチャット (`/api/chat` 中継 + Vertex AI) は本フェーズではドロップ。別途詳細設計する。図には骨格として残すが、本ドキュメントの本文では扱わない。
 
 ## 3. 大原則: BE一本道
 
-**ブラウザはBEを直接叩かない。** BEへのアクセスは必ず Next.js のサーバー側 (Server Component / Server Action / Route Handler) を経由する。JSONを取得する経路は全て `src/lib/api.ts` の `api<T>()` を通る。唯一の例外はストリーミング中継 (`/api/chat`, §9) で、これは `.json()` できないため `api()` を経由できないが、**認証ヘッダの組み立てだけは `api.ts` の `beHeaders()` を共有する**。これにより「BEへの出口は2つ (api / chat) あるが、認証ヘッダの付与ロジックは1箇所」という状態を保つ。
+**ブラウザはBEを直接叩かない。** BEへのアクセスは必ず Next.js のサーバー側 (Server Component / Server Action / Route Handler) を経由する。JSONを取得する経路は全て `src/lib/api.ts` の `api<T>()` を通る。将来ストリーミング中継 (`/api/chat`, §9 / 次フェーズ) を足すときも、これは `.json()` できないため `api()` を経由できないが、**認証ヘッダの組み立てだけは `api.ts` の `beHeaders()` を共有する**設計とし、「BEへの出口が増えても認証ヘッダの付与ロジックは1箇所」という状態を保つ。本フェーズの出口は `api()` の1経路のみ。
 
 ```
 ブラウザ → Next.jsサーバー → lib/api.ts api()        → BE   ← JSON取得
-ブラウザ → Next.jsサーバー → /api/chat + beHeaders() → BE   ← ストリーミングのみ
+ブラウザ → Next.jsサーバー → /api/chat + beHeaders() → BE   ← ストリーミング (次フェーズ)
 ブラウザ → BE                                              ← 存在しない
 ```
 
@@ -102,17 +104,17 @@ App Router 時代の Next.js は、かつてフロントエンドで別途必要
 | FE (Server Component) | **UX**: 見せない・出さない | `role !== "admin"` なら `notFound()`、adminリンクの非表示 |
 | BE (モックBEも同様) | **防衛**: 拒否する | role を自分のDBで引き、権限がなければ 403 |
 
-現状は `role === "admin"` の文字列等価チェックを FE・BE の各所に直接書いている。ロールが2種類で粒度が粗い今はこれで十分 (KISS) だが、3つ目のロールや「メモ削除だけ許可」のような粒度の細かい権限が必要になった瞬間、全ての `=== "admin"` 箇所を触ることになる。その時は capability/permission ベース (例: `can(user, "members.manage")`) への移行を検討する。**role等価は確定事項ではなく、要件が増えたら見直す前提の暫定解**である。
+role 判定は各所に `role === "admin"` を**直書きせず、1箇所の共通関数に集約する** (例: `lib/auth/can.ts` の `isAdmin(user)` / `can(user, "members.manage")`)。FE・BE双方がこの関数を呼ぶ。判定が FE・BE 含め複数箇所で使われる以上、最初から共通化しておく (§15「2箇所目が現れたら昇格」に沿う)。こうすれば 3つ目のロールや「メモ削除だけ許可」のような粒度の細かい権限が必要になっても、変更は共通関数の中だけで済み、呼び出し側 (`isAdmin`/`can`) は変えなくてよい。**capability名 (`members.manage` 等) の定義は確定事項ではなく、要件が増えたら追加していく。**
 
 FE側のチェックは画面の出し分けにすぎず、すり抜けられても何も起きない。**認可の最終判断は常にBE。** モックBE (`lib/mock/handlers.ts`) も実BEと同じ403を返すように書いてあり、この契約はモック段階から有効である。
 
-ストリーミングの `/api/chat` は `handlers.ts` を通らない別経路なので、認可チェックを**ルート自身に書く** (`route.ts` のモック分岐で `roleOf()` を検証して403/404を返す)。`orgId`/`memoId` はクライアント由来の値であり、ページのロード時チェックはこのエンドポイントの防壁にならないため、ここを抜くと「組織外のメモをチャットから読める」穴になる。チャットの認可契約 (組織未所属→403 / メモ無し→404) は `route.ts` のコメントに明記し、実BEが同じ挙動を実装する根拠とする。
+> 次フェーズ補足: `handlers.ts` を通らない別経路 (ストリーミングの `/api/chat` 等) を足す場合は、認可チェックを**ルート自身に書く**。`orgId`/`memoId` がクライアント由来でページのロード時チェックが防壁にならないため。AIチャットの認可契約は別途詳細設計時に定義する。
 
 ## 6. データ取得・更新・キャッシュ
 
 ### 6-1. 取得は Server Component で
 
-ページが必要とするデータは、`lib/<feature>.ts` のデータ取得関数 (内部で `api<T>()` を呼ぶ) を Server Component が `await` して取得する。Server Component から `api()` を直接叩かず、エンドポイントの組み立てとキャッシュ方針 (`no-store` / `revalidate`) を持つ薄い取得関数を一段挟む (例: `lib/data/memos.ts` の `getMyMemos`)。取得関数は機能単位で `lib/data/` 配下に置く。ローディング状態の管理は `loading.tsx`、エラーは throw → `notFound()` / error boundary に任せる。useEffect でのデータ取得はこのコードベースに存在しない。
+ページが必要とするデータは、`lib/<feature>.ts` のデータ取得関数 (内部で `api<T>()` を呼ぶ) を Server Component が `await` して取得する。Server Component から `api()` を直接叩かず、エンドポイントの組み立てとキャッシュ方針 (詳細は §6-3) を持つ薄い取得関数を一段挟む (例: `lib/data/memos.ts` の `getMyMemos`)。取得関数は機能単位で `lib/data/` 配下に置く。ローディング状態の管理は `loading.tsx`、エラーは throw → `notFound()` / error boundary に任せる。useEffect でのデータ取得はこのコードベースに存在しない。
 
 ### 6-2. 更新は Server Action で
 
@@ -147,22 +149,22 @@ FE側のチェックは画面の出し分けにすぎず、すり抜けられて
  └─ ない
      ├─ リロード・URL共有で残したい？ (検索条件、ページ番号、タブ)
      │   └─ YES → URL (searchParams)。<Link> か router.push で変更
-     └─ その画面限りの一時的な状態？ (モーダル開閉、入力中、チャット履歴)
+     └─ その画面限りの一時的な状態？ (モーダル開閉、入力中の値、フォーカス)
          └─ YES → useState
 ```
 
 これに当てはまらないものがほぼ無いため、グローバルストアの出番がない。唯一の横断的データであるユーザー情報は、**サーバーが確定させた値の読み取り専用配布**として `UserProvider` (Context 1個) で流す。クライアントからこのContextの値を更新することは禁止 — 更新は必ず Server Action 経由で、新しい値はサーバーから降ってくる。
 
-具体例: メモ一覧のページ番号はURL (`?page=2`)。ページャーは `<Link>` だけで実装され、クライアント状態はゼロ。AIチャットの会話履歴は永続化しないため `useState` (永続化したくなった時点でBE保存 + Server Component初期表示に変える)。
+具体例: メモ一覧のページ番号はURL (`?page=2`)。ページャーは `<Link>` だけで実装され、クライアント状態はゼロ。メモ作成フォームの入力中の値は送信までの一時状態なので `useState`。
 
 ## 8. クライアント境界 — "use client" の規律
 
-デフォルトは全部 Server Component。`"use client"` を付けてよいのは**対話 (クリック・入力・ブラウザAPI) が必要な末端コンポーネントだけ**。このプロジェクトでは2ファイルのみ:
+デフォルトは全部 Server Component。`"use client"` を付けてよいのは**対話 (クリック・入力・ブラウザAPI) が必要な末端コンポーネントだけ**。本フェーズでは1ファイルのみ (AIチャット追加後でも2ファイル):
 
 | ファイル | クライアントが必要な理由 |
 |---|---|
 | `memo-form.tsx` | File API でファイルを読み、GCSへ直接PUTする |
-| `chat.tsx` | レスポンスストリームを `getReader()` で逐次読みして描画する |
+| `chat.tsx` (次フェーズ) | レスポンスストリームを `getReader()` で逐次読みして描画する |
 
 データの流れは一方向に固定する: **データは親 (Server) から props で下に流す、操作は Server Action として上に投げる。** クライアントコンポーネントが自分で fetch してデータを取りに行くことはしない。
 
@@ -172,12 +174,11 @@ FE側のチェックは画面の出し分けにすぎず、すり抜けられて
 
 Route Handler (`app/api/`) は「ブラウザとNext.jsサーバーの間にHTTPエンドポイントが必要な場合」にだけ作る。Server Component / Server Action で表現できるものに Route Handler を作ってはいけない (自分のフロントのために自分のAPIを作るのは二度手間)。
 
-正当な理由は現状2つだけ:
+正当な理由は本フェーズでは1つだけ:
 
-- **ストリーミング**: `/api/chat`。AI回答を逐次表示するには、ブラウザが直接読めるストリームのエンドポイントが要る。中身は認証を付けてBEのストリームを素通しするだけの薄い中継。
 - **モックのGCS代役**: `/api/mock-upload`。署名URLの宛先としてHTTPのPUT/GETを受ける必要がある。本番では使われない。
 
-将来ポーリングや無限スクロールが必要になったら、その時に初めて3本目を生やす。
+次フェーズで足る見込みの2本目が**ストリーミング** (`/api/chat`)。AI回答を逐次表示するには、ブラウザが直接読めるストリームのエンドポイントが要る (中身は認証を付けてBEのストリームを素通しするだけの薄い中継)。これはAIチャットの詳細設計時に追加する。さらにポーリングや無限スクロールが必要になったら、その時に初めて次を生やす。
 
 ## 10. 画像アップロード — 署名URL方式
 
@@ -192,11 +193,9 @@ Route Handler (`app/api/`) は「ブラウザとNext.jsサーバーの間にHTTP
 
 メモのレコードに保存されるのは `objectPath` という文字列だけ。表示時は `lib/images.ts` がパスを表示URLに解決する (モック: `/api/mock-upload/...`、本番: BEが返す署名付き読み取りURL)。FE側のコードはモックと本番で変わらない。
 
-## 11. AIチャット
+## 11. AIチャット（次フェーズ・本ドキュメントではドロップ）
 
-AI呼び出し (Vertex AI / Gemini) は**BEの責務**。メモ本文・添付画像をコンテキストとして組み立てるのはデータの持ち主であるBEが行うべきで、FEはプロンプト構築に関与しない。
-
-FE側の関与は2点のみ: `/api/chat` が認証を付けてBEのストリームを中継すること、`chat.tsx` がストリームを逐次描画すること。モックモードでは `lib/mock/chat.ts` が擬似ストリームを返すが、**FE側の読み取りコードは本番と完全に同一**。モックで開発したUIがそのまま本番で動く。
+AIチャットは本フェーズの対象外。別途詳細設計する。設計の前提だけ先に置いておくと、AI呼び出し (Vertex AI / Gemini) は**BEの責務**で、FEは `/api/chat` でのストリーム中継と `chat.tsx` での逐次描画に限定する想定。具体的な認可契約・モック方針はその設計時に確定させる。
 
 ## 12. ディレクトリ構成とコロケーション
 
@@ -213,9 +212,9 @@ src/
           _components/       ★このルート専用のコンポーネント
         [memoId]/
           page.tsx
-          _components/chat.tsx
+          # _components/chat.tsx  (次フェーズ: AIチャット)
       admin/members/         admin専用画面 (actions.ts も同居)
-    api/chat/route.ts        唯一のRoute Handler
+    # api/chat/route.ts      (次フェーズ: AIチャットのストリーム中継)
     api/mock-upload/         モック専用 (本番では未使用)
   components/                2箇所以上から使われる共有コンポーネント
   lib/
@@ -243,7 +242,7 @@ src/
 `lib/mock/` はネットワークを介さないインプロセスのモックBEで、`BE_URL` 未設定時に `api.ts` が自動でこちらにディスパッチする。設計上のこだわりは次の3点。
 
 - **実BEと同じURL設計・同じ認可**: ハンドラのパス・メソッド・403/404/422の返し方が、そのまま実BEのAPI仕様書になる。BEチームには `handlers.ts` を仕様として渡せる。
-- **切替はBE_URLだけ**: アプリケーションコードに `if (mock)` 分岐は存在しない (分岐は `api.ts`・`auth.ts`・`/api/chat` の入口3箇所に隔離)。
+- **切替はBE_URLだけ**: アプリケーションコードに `if (mock)` 分岐は存在しない (分岐は `api.ts`・`auth.ts` の入口2箇所に隔離。次フェーズで `/api/chat` を足す場合もそこに閉じる)。
 - **インメモリで揮発**: 永続化しない。モックに永続化を実装し始めるとモックが第2のBEになってしまう。
 
 **注意: 「実BEと同じ」を強制する仕組みは現状ない。** `handlers.ts` はページネーション計算・`limit` 上限・422検証・author スコープ・403/404といった実ロジックを持つが、別言語で書かれる実BEがこれと同一挙動を再実装する保証 (契約テスト等) は存在しない。乖離は静かに起きうる。実BE実装時は `handlers.ts` を仕様として読み合わせ、可能なら両者を同じケースで叩く契約テストを用意するのが望ましい。
@@ -271,15 +270,14 @@ BEの非2xxは `api.ts` が `ApiError(status)` として throw する。受け�
 | ユーザー固有データの共有キャッシュ | no-store + React.cache (§6-3) |
 | 1箇所でしか使わないもの (取得関数を除く) の共通化 | コロケーション。2箇所目が現れたら昇格 (§12) |
 | ロジックを抱える service / repository 層 | `lib/data/<feature>.ts` は薄い取得関数のみ (エンドポイント + キャッシュ方針)。ロジックの持ち主は BE (§6-1, §12) |
-| クライアントでのプロンプト構築 | AI関連はBEの責務 (§11) |
 
 ## 16. 本番 (GCP) 移行チェックリスト
 
 1. `.env` に `BE_URL` を設定 (モックが切れる)
 2. BE (Cloud Run) を認証必須にし、Next.jsのサービスアカウントへ `roles/run.invoker` 付与
-3. `npm i google-auth-library` し、`lib/api.ts` の `beHeaders()` 内のIDトークン付与コメントを有効化 (api() と /api/chat の両方に一度で効く)
+3. `npm i google-auth-library` し、`lib/api.ts` の `beHeaders()` 内のIDトークン付与コメントを有効化 (`api()` に効く。次フェーズの `/api/chat` も `beHeaders()` 共有のため自動で効く)
 4. Firebase Auth (Identity Platform) を設定し、`lib/auth.ts` の `getUid()` を `verifySessionCookie` 実装に差し替え。**現状の本番パスは cookie があっても常に `null` を返す未実装スタブなので、ここを実装するまで `BE_URL` を立てると全APIが401になる。** ログイン画面・セッションCookie発行・ログアウトの新規実装が必要 (ここだけは「FE変更不要」ではない、相応のFE作業)
 5. BEに `/uploads/signed-url` (GCS署名URL発行) を実装。FE変更不要
-6. BEに `/orgs/:id/memos/:id/chat` (Vertex AIストリーム) を実装。FE変更不要
-7. (ステップ3で `beHeaders()` を共有しているため `/api/chat` の認証付与は自動。個別対応は不要)
-8. 動作確認後、`app/api/mock-upload/` と `lib/mock/` を削除してもよい (残しても無害)
+6. 動作確認後、`app/api/mock-upload/` と `lib/mock/` を削除してもよい (残しても無害)
+
+> 次フェーズ (AIチャット) で BEに `/orgs/:id/memos/:id/chat` (Vertex AIストリーム) を実装し `app/api/chat/route.ts` を足す。ステップ3で `beHeaders()` を共有しているため認証付与は自動。
