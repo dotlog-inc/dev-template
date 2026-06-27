@@ -111,17 +111,47 @@ FE側のチェックは画面の出し分けにすぎず、すり抜けられて
 
 ## 6. データ取得・更新・キャッシュ
 
-### 6-1. 取得は Server Component で
+### 6-1. BE 出口は repository に集約 (read + write 両方)
 
-ページが必要とするデータは、`lib/<feature>.ts` のデータ取得関数 (内部で `api<T>()` を呼ぶ) を Server Component が `await` して取得する。Server Component から `api()` を直接叩かず、エンドポイントの組み立てとキャッシュ方針 (詳細は §6-3) を持つ薄い取得関数を一段挟む (例: `lib/data/memos.ts` の `getMyMemos`)。取得関数は機能単位で `lib/data/` 配下に置く。ローディング状態の管理は `loading.tsx`、エラーは throw → `notFound()` / error boundary に任せる。useEffect でのデータ取得はこのコードベースに存在しない。
+BE への出口は **リソース単位の薄い repository** にまとめる。`lib/data/<resource>.ts` が `api<T>()` を1段ラップした read/write の関数群を提供する (例: `memos.list` / `memos.get` / `memos.create` / `memos.remove`)。Server Component / Server Action は repository を呼ぶだけで、`api()` を直接叩かない。
 
-### 6-2. 更新は Server Action で
+書き込みも repository に含める理由: Server Action は `"use server"` を付けた時点で **app 全体から呼べる RPC エンドポイント**になる。「このページ専用の書き込み」という概念は実態として成立しない。読み (`list` / `get`) と書き (`create` / `remove`) を同じ resource ファイルに置くと、エンドポイント・契約・型が1箇所に集まり、複数ページから自然に再利用できる。
 
-すべての書き込みは `actions.ts` の Server Action が行う。パターンは固定:
+**repository に持たせるもの**: エンドポイントの組み立て、キャッシュ方針 (詳細は §6-3)、BE 契約の型。
+**repository に持たせないもの**: バリデーション、`revalidatePath` / `redirect`、FormData 変換。これらは呼び手 (Server Component / Server Action) の責務。**「薄い」を超えた瞬間に §15 の fat repository 化が始まる**ので、PR レビューで止める。
+
+取得時の例:
+
+```ts
+// src/app/orgs/[orgId]/memos/page.tsx
+import { memos } from "@/lib/data/memos"
+
+export default async function Page({ params, searchParams }) {
+  const { orgId } = await params
+  const { page } = await searchParams
+  const data = await memos.list(orgId, Number(page ?? 1))
+  ...
+}
+```
+
+ローディング状態の管理は `loading.tsx`、エラーは throw → `notFound()` / error boundary に任せる。useEffect でのデータ取得はこのコードベースに存在しない。
+
+### 6-2. 更新は Server Action 経由 (repository を呼ぶ薄いラッパ)
+
+すべての書き込みは Server Action 経由。Server Action は **repository を呼ぶ薄いラッパ**で、本体のBE接続は §6-1 の repository が持つ。
 
 ```
-検証 → api() でBEに書き込み → revalidatePath / redirect
+Server Action: FormData → 検証 → repository.method() → revalidatePath / redirect
+repository:    api() で BE に投げる以上のことはしない
 ```
+
+**Server Action の置き場は呼び手側の都合で決める**:
+
+- 1つ目はそのページ (`page.tsx`) の中に **inline で `'use server'`** を書く
+- 2つ目が出てきた時点で、その route segment 配下のファイル (例: `mutations.ts`) に切り出す (§12 の昇格ルール)
+- どこに置いても、Server Action 自体が global RPC である事実は変わらない (route segment は単なる物理配置)
+
+action 側がルート文字列 (`/orgs/[orgId]/memos` 等) と `revalidatePath` / `redirect` を持つ。repository はルートを知らない。同じ mutation を別ページから呼ぶときは、そのページの action ラッパが固有の revalidate / redirect を担う。
 
 更新後の画面反映は revalidate に任せる。**クライアント側でキャッシュを同期するコードは書かない** — 同期すべきクライアントキャッシュがそもそも存在しないため。
 
@@ -132,7 +162,7 @@ FE側のチェックは画面の出し分けにすぎず、すり抜けられて
 | ユーザー固有 | /me、自分のメモ一覧 | `cache: "no-store"`。リクエストをまたぐキャッシュ禁止 |
 | 全員共通 | 組織のプラン定義、マスタ | `next: { revalidate, tags }` で共有キャッシュ可 |
 
-ユーザー固有データを共有キャッシュに乗せると**他人のデータが見える事故**になる。これが本アーキテクチャで最も重大な禁止事項。取得関数を `lib/data/` に集約し、per-user データ (`lib/data/users.ts`) を分けてあるのはこの境界を物理的に見えるようにするため。
+ユーザー固有データを共有キャッシュに乗せると**他人のデータが見える事故**になる。これが本アーキテクチャで最も重大な禁止事項。repository を `lib/data/` に集約し、per-user データ (`lib/data/users.ts`) を分けてあるのはこの境界を物理的に見えるようにするため。
 
 リクエスト内の重複は `React.cache()` で潰す。`getCurrentUser()` をレイアウトとページの両方が呼んでも、BEへの問い合わせは1リクエストにつき1回。リクエストが終われば消えるので、鮮度やログアウト時の掃除を考える必要がない — 「保持しないから同期問題が存在しない」。
 
@@ -204,15 +234,15 @@ src/
     orgs/[orgId]/            組織コンテキスト (現在の組織はURLが持つ)
       layout.tsx             組織ヘッダ + UserProvider
       memos/
-        page.tsx             一覧 + ページネーション
-        actions.ts           ★この機能のServer Action (ルートの隣に置く)
+        page.tsx             一覧 + 新規作成フォーム (Server Action 1つ目は inline)
+        # mutations.ts       Server Action が2つ目に増えた時点でここに切り出す
         new/
           page.tsx
           _components/       ★このルート専用のコンポーネント
         [memoId]/
           page.tsx
           # _components/chat.tsx  (次フェーズ: AIチャット)
-      admin/members/         admin専用画面 (actions.ts も同居)
+      admin/members/         admin専用画面
     # api/chat/route.ts      (次フェーズ: AIチャットのストリーム中継)
     api/mock-upload/         モック専用 (本番では未使用)
   components/                2箇所以上から使われる共有コンポーネント
@@ -221,22 +251,22 @@ src/
     auth.ts                  セッション検証 (uid解決)
     images.ts                画像URL解決
     types.ts                 BE契約の型 (将来はOpenAPIから自動生成)
-    data/                    BE取得関数 (機能単位・取得のみ)
-      users.ts               getCurrentUser (per-userデータ・React.cache)
-      memos.ts               getMyMemos / getMemo
-      members.ts             getMembers
+    data/                    repository (リソース単位・薄いBEラッパ・read+write両方)
+      users.ts               users.getCurrent (per-userデータ・React.cache)
+      memos.ts               memos.list / memos.get / memos.create / memos.remove ...
+      members.ts             members.list / members.add ...
     mock/                    モックBE (= 実BEのAPI仕様書)
 ```
 
-原則は**コロケーション**: あるページに関係するもの (Server Action、専用コンポーネント) はそのルートの近くに置く。`_components/` の `_` プレフィックスはルーティング対象外を意味するNext.jsの規約。
+原則は**コロケーション**: あるページに関係する専用コンポーネントはそのルートの近くに置く。`_components/` の `_` プレフィックスはルーティング対象外を意味するNext.jsの規約。
 
-`actions.ts` を route segment と同居させるのは、Server Action がそのページ専用の更新系であり、ページの form と1対1で結びつくため。`lib/` 配下に出すと「取得は lib/data、更新は lib/actions」のような service 層の入口になりやすく、§15 の方針に反する。ページから渡される FormData の検証・`revalidatePath` 対象もそのルート固有なので、隣に置く方が読み手の動線が短い。
+**昇格ルール**: コンポーネントや関数は、**2箇所以上で使われた時点で初めて** `components/` や `lib/` に移動する。1箇所でしか使われないものを最初から共通ディレクトリに置かない。これが早すぎる共通化を防ぐ唯一にして十分なルール。
 
-**昇格ルール**: コンポーネントや (取得以外の) 関数は、**2箇所以上で使われた時点で初めて** `components/` や `lib/` に移動する。1箇所でしか使われないものを最初から共通ディレクトリに置かない。これが早すぎる共通化を防ぐ唯一にして十分なルール。
+**例外: BE 出口 (repository) は最初から `lib/data/<resource>.ts` に置く**。Server Action は `"use server"` を付けた時点で app 全体から呼べる RPC エンドポイントなので、書き込みも「ページ専用」にはならない。read/write をリソース単位で1ファイルに集約しておくと、エンドポイント・キャッシュ方針・契約の型が機能単位で1箇所に集まり、複数ページから自然に再利用できる (§6-1)。
 
-**例外: BEデータ取得関数は最初から `lib/data/<feature>.ts` に置く**。使用箇所が1つでも切り出す (§6-1)。取得を `lib/data/` に集約しておくと、エンドポイントの組み立てとキャッシュ方針 (`no-store` / `revalidate`) が機能単位で1箇所に集まり、Server Component 側は「何を取るか」だけを書けばよくなる。2箇所目が来ても呼び出しを差し替える必要がない。
+**Server Action の置き場 (route segment 側)**: 1つ目は呼び手 `page.tsx` の中に inline で `'use server'` を書く (ファイル増やさない)。2つ目が出てきた時点で、その route segment 配下の `mutations.ts` に切り出す。中身は repository を呼ぶ薄いラッパで、validation・`revalidatePath` / `redirect` を担う。route 文字列を持つのはこの層 (repository は持たない)。
 
-`features/` ディレクトリやロジックを抱える service 層といったレイヤードアーキテクチャは作らない。`lib/data/<feature>.ts` はあくまで **薄い取得関数 (エンドポイント + キャッシュ方針) の置き場**であり、ビジネスロジックは持たせない (ロジックの持ち主は BE)。`api()` を1段ラップする以上の抽象は積まない。
+`features/` ディレクトリやレイヤードアーキテクチャは作らない。`lib/data/<resource>.ts` はあくまで **薄い BE ラッパ (エンドポイント + キャッシュ方針 + 型)**。ビジネスロジックは持たせない (ロジックの持ち主は BE)。`api()` を1段ラップする以上の抽象は積まない (§15)。
 
 ## 13. モックBEの設計意図
 
@@ -269,8 +299,8 @@ BEの非2xxは `api.ts` が `ApiError(status)` として throw する。受け�
 | 自分のフロント用のAPI Routes | Server Component / Server Action |
 | クライアントからのBE直叩き | lib/api.ts 経由 (§3) |
 | ユーザー固有データの共有キャッシュ | no-store + React.cache (§6-3) |
-| 1箇所でしか使わないもの (取得関数を除く) の共通化 | コロケーション。2箇所目が現れたら昇格 (§12) |
-| ロジックを抱える service / repository 層 | `lib/data/<feature>.ts` は薄い取得関数のみ (エンドポイント + キャッシュ方針)。ロジックの持ち主は BE (§6-1, §12) |
+| 1箇所でしか使わないもの (repository を除く) の共通化 | コロケーション。2箇所目が現れたら昇格 (§12) |
+| ロジックを抱える service 層 / fat repository | `lib/data/<resource>.ts` は薄い BE ラッパ (read+write 両方・エンドポイント + キャッシュ方針 + 型のみ)。validation / revalidate / redirect は Server Action 側、ビジネスロジックの持ち主は BE (§6-1, §6-2, §12) |
 
 ## 16. 本番 (GCP) 移行チェックリスト
 
