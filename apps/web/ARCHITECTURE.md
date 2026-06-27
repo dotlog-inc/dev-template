@@ -145,13 +145,9 @@ Server Action: FormData → 検証 → repository.method() → revalidatePath / 
 repository:    api() で BE に投げる以上のことはしない
 ```
 
-**Server Action の置き場は呼び手側の都合で決める**:
+**Server Action wrapper は `page.tsx` の中に inline で `'use server'`** を書く。各 wrapper は3〜5行 (FormData → 検証 → `repository.method()` → `revalidatePath` / `redirect`) で済むため、ページ内に2〜3個並んでも圧迫されない。route segment 配下に Server Action 専用ファイル (`actions.ts` / `mutations.ts` 等) は作らない。「同じ wrapper を3ページ以上から使う」のような明確な重複が出てから初めて置き場を考える (§15 の遅延昇格)。
 
-- 1つ目はそのページ (`page.tsx`) の中に **inline で `'use server'`** を書く
-- 2つ目が出てきた時点で、その route segment 配下のファイル (例: `mutations.ts`) に切り出す (§12 の昇格ルール)
-- どこに置いても、Server Action 自体が global RPC である事実は変わらない (route segment は単なる物理配置)
-
-action 側がルート文字列 (`/orgs/[orgId]/memos` 等) と `revalidatePath` / `redirect` を持つ。repository はルートを知らない。同じ mutation を別ページから呼ぶときは、そのページの action ラッパが固有の revalidate / redirect を担う。
+action 側がルート文字列 (`/orgs/[orgId]/memos` 等) と `revalidatePath` / `redirect` を持つ。repository はルートを知らない。同じ mutation を別ページから呼ぶときは、そのページの action wrapper が固有の revalidate / redirect を持つ (repository を呼ぶ箇所が増えるだけ)。
 
 更新後の画面反映は revalidate に任せる。**クライアント側でキャッシュを同期するコードは書かない** — 同期すべきクライアントキャッシュがそもそも存在しないため。
 
@@ -234,8 +230,7 @@ src/
     orgs/[orgId]/            組織コンテキスト (現在の組織はURLが持つ)
       layout.tsx             組織ヘッダ + UserProvider
       memos/
-        page.tsx             一覧 + 新規作成フォーム (Server Action 1つ目は inline)
-        # mutations.ts       Server Action が2つ目に増えた時点でここに切り出す
+        page.tsx             一覧 + 新規作成フォーム + Server Action wrapper を inline
         new/
           page.tsx
           _components/       ★このルート専用のコンポーネント
@@ -264,7 +259,7 @@ src/
 
 **例外: BE 出口 (repository) は最初から `lib/data/<resource>.ts` に置く**。Server Action は `"use server"` を付けた時点で app 全体から呼べる RPC エンドポイントなので、書き込みも「ページ専用」にはならない。read/write をリソース単位で1ファイルに集約しておくと、エンドポイント・キャッシュ方針・契約の型が機能単位で1箇所に集まり、複数ページから自然に再利用できる (§6-1)。
 
-**Server Action の置き場 (route segment 側)**: 1つ目は呼び手 `page.tsx` の中に inline で `'use server'` を書く (ファイル増やさない)。2つ目が出てきた時点で、その route segment 配下の `mutations.ts` に切り出す。中身は repository を呼ぶ薄いラッパで、validation・`revalidatePath` / `redirect` を担う。route 文字列を持つのはこの層 (repository は持たない)。
+**Server Action の置き場**: `page.tsx` に inline で `'use server'` を書く。各 wrapper は3〜5行で済むため、route segment 配下に Server Action 専用ファイル (`actions.ts` / `mutations.ts`) は作らない。「同じ wrapper を複数ページから繰り返し書く」状態が明確に出てから、その時点で初めて共通の置き場を考える (§15 の遅延昇格)。route 文字列・`revalidatePath` / `redirect` を持つのはこの inline wrapper 層 (repository は持たない)。
 
 `features/` ディレクトリやレイヤードアーキテクチャは作らない。`lib/data/<resource>.ts` はあくまで **薄い BE ラッパ (エンドポイント + キャッシュ方針 + 型)**。ビジネスロジックは持たせない (ロジックの持ち主は BE)。`api()` を1段ラップする以上の抽象は積まない (§15)。
 
