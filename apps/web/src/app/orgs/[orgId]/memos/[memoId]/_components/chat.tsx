@@ -26,7 +26,6 @@ export function Chat({ orgId, memoId }: { orgId: string; memoId: string }) {
 
     const history: ChatMessage[] = [...messages, { role: "user", content: question }];
     setMessages([...history, { role: "assistant", content: "" }]);
-    setInput("");
     setStreaming(true);
 
     try {
@@ -36,6 +35,8 @@ export function Chat({ orgId, memoId }: { orgId: string; memoId: string }) {
         body: JSON.stringify({ orgId, memoId, messages: history }),
       });
       if (!res.ok || !res.body) throw new Error("chat failed");
+
+      setInput("");
 
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
@@ -51,6 +52,7 @@ export function Chat({ orgId, memoId }: { orgId: string; memoId: string }) {
         });
       }
     } catch {
+      setInput(question);
       setMessages((prev) => {
         const next = [...prev];
         next[next.length - 1] = {
