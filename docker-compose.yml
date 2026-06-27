@@ -39,15 +39,14 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     environment:
-      NEXT_PUBLIC_API_BASE_URL: ${NEXT_PUBLIC_API_BASE_URL:-http://localhost:8080}
+      # 空なら内蔵モックBEで動作。実BEに繋ぐときだけ URL を設定する
+      BE_URL: ${BE_URL:-}
     ports:
       - "${WEB_PORT:-3000}:3000"
     volumes:
       - ./apps/web:/app
       - web-node-modules:/app/node_modules
       - web-next:/app/.next
-    depends_on:
-      - api
 
 volumes:
   postgres-data:

@@ -7,7 +7,7 @@ Next.js + FastAPI + PostgreSQL + Terraform をひとつに束ねた個人用モ�
 
 | Layer    | Tool                              |
 | -------- | --------------------------------- |
-| Frontend | Next.js 15 (App Router) + TypeScript |
+| Frontend | Next.js 16 (App Router) + TypeScript |
 | Backend  | FastAPI + SQLAlchemy + Alembic    |
 | DB       | PostgreSQL 16                     |
 | IaC      | Terraform 1.9 (最小雛形)           |
@@ -47,19 +47,29 @@ mise run dev
 
 立ち上がったら:
 
-- Web:        http://localhost:3000
+- Web:        http://localhost:3000  (デモ組織のメモ一覧へリダイレクト)
 - API docs:   http://localhost:8080/docs
 - API health: http://localhost:8080/health
 
-## 初回マイグレーション
+## Web (apps/web) について
 
-別ターミナルで:
+`apps/web` は「組織メモ + AI」の参照実装。`BE_URL` を設定しなければ**内蔵モックBE
+(`src/lib/mock`) で完結して動く**ので、API や DB を立てなくても画面を触れる。
+設計思想は [apps/web/ARCHITECTURE.md](apps/web/ARCHITECTURE.md) を参照
+(KISS / BE一本道 / Server Component + Server Action / モックBE)。
+
+実BE (FastAPI など) に繋ぐときは `.env` に `BE_URL=https://...` を設定する。
+モックBE (`src/lib/mock/handlers.ts`) がそのまま実BEのAPI仕様書になっている。
+
+## 初回マイグレーション (API を使う場合)
+
+`apps/api` (FastAPI) は単体で動く別レイヤー。利用するなら別ターミナルで:
 
 ```bash
 mise run api:migrate
 ```
 
-`items` テーブルが作成され、Web 画面から item を追加できるようになる。
+`items` テーブルが作成される。
 
 ## よく使うタスク
 
