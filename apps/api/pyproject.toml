@@ -9,6 +9,7 @@ dependencies = [
     "psycopg[binary]>=3.2",
     "alembic>=1.13",
     "pydantic-settings>=2.6",
+    "firebase-admin>=6",
 ]
 
 [dependency-groups]
@@ -59,6 +60,10 @@ ignore = [
     "TD",    # TODO の著者・リンク強制を無効化（issue 管理側でトラッキング）
     "FIX",   # TODO/FIXME コメントの存在を警告しない
     "ERA001", # コメントアウトされたコード検出を無効化
+    # ---- 例外メッセージ ----
+    "TRY003", # raise 時のメッセージ指定を許容（例外クラス内定義を強制しない）
+    "EM101",  # 文字列リテラルを例外メッセージに使用することを許容
+    "EM102",  # f-string リテラルを例外メッセージに使用することを許容
     # ---- 型アノテーション ----
     "ANN",   # 型アノテーションは pyright に任せる
     "TC",    # SQLAlchemy の Mapped 型は実行時に解決されるため型専用 import に倒さない
@@ -68,6 +73,8 @@ ignore = [
 "tests/**/*.py" = [
     "S101",    # テストでの assert を許容
     "PLR2004", # テストでのマジック値を許容
+    "S105",    # テスト用のハードコード文字列（トークン等）を許容
+    "S106",    # 同上
 ]
 "migrations/**/*.py" = [
     "INP001",  # Alembic マイグレーションは名前空間パッケージのため __init__.py 不要

@@ -4,8 +4,10 @@ from alembic import context
 from sqlalchemy import engine_from_config, pool
 from sqlmodel import SQLModel
 
-from src.config import settings
-from src.models import *  # noqa: F403  (テーブル定義を import して SQLModel.metadata に登録)
+from src.infrastructure.database.models import MemoOrm, UserOrm
+from src.utils.config import settings
+
+_ = (MemoOrm, UserOrm)  # SQLModel.metadata へのテーブル登録を保証
 
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)

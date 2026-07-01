@@ -18,3 +18,11 @@ depends = ["//apps/web:check", "//apps/api:check", "//infra:check"]
 [tasks."dev:up"]
 description = "web・api を並列起動"
 run = "mise run //apps/web:dev & mise run //apps/api:dev & wait"
+
+[tasks."local:up"]
+description = "ローカル依存サービス（DB・Firebase エミュレータ）を起動し、ヘルスチェックが通るまで待機"
+run = "docker compose up db firebase-emulator -d --wait"
+
+[tasks."local:down"]
+description = "ローカル依存サービスを停止"
+run = "docker compose stop db firebase-emulator"

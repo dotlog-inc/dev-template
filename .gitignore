@@ -49,3 +49,6 @@ crash.log
 
 # Docker
 .docker/
+
+# Local dev emulator data (firebase emulator export/import)
+local/firebase/data/
