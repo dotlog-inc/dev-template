@@ -1,6 +1,6 @@
 from fastapi import APIRouter, status
 
-from src.application.dto.memo import CreateMemoDTO, UpdateMemoDTO
+from src.application.dto.memo import UNSET, CreateMemoDTO, UpdateMemoDTO
 from src.domain.models.memo import Memo
 from src.presentation.auth import CurrentUser
 from src.presentation.di.usecase import (
@@ -68,9 +68,8 @@ def update_memo(
     current_user: CurrentUser,
     usecase: UpdateMemoUseCaseDep,
 ) -> MemoResponse:
-    memo = usecase.execute(
-        UpdateMemoDTO(user_id=current_user.id, memo_id=memo_id, title=payload.title, body=payload.body)
-    )
+    body = payload.body if "body" in payload.model_fields_set else UNSET
+    memo = usecase.execute(UpdateMemoDTO(user_id=current_user.id, memo_id=memo_id, title=payload.title, body=body))
     return _to_response(memo)
 
 

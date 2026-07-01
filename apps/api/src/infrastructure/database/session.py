@@ -9,4 +9,9 @@ engine = create_engine(settings.database_url, pool_pre_ping=True)
 
 def get_session() -> Generator[Session]:
     with Session(engine) as session:
-        yield session
+        try:
+            yield session
+            session.commit()
+        except Exception:
+            session.rollback()
+            raise

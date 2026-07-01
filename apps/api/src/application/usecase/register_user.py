@@ -13,6 +13,8 @@ class RegisterUserUseCase:
     def execute(self, dto: RegisterUserDTO) -> User:
         if self._user_repo.get(dto.uid) is not None:
             raise ConflictError(f"User {dto.uid} already exists")
+        if self._user_repo.get_by_email(dto.email) is not None:
+            raise ConflictError(f"Email {dto.email} already registered")
         now = datetime.now(UTC)
         user = User(
             id=dto.uid,

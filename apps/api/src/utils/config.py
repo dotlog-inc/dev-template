@@ -7,7 +7,6 @@ class Settings(BaseSettings):
     database_url: str = "postgresql+psycopg://app:app@localhost:5432/app"
     cors_origins: str = "http://localhost:3000"
     firebase_project_id: str = "demo-project"
-    firebase_auth_emulator_host: str | None = None
 
     @property
     def cors_origin_list(self) -> list[str]:
