@@ -1,18 +1,18 @@
 # dev-template
 
 Next.js + FastAPI + PostgreSQL + Terraform をひとつに束ねた個人用モノレポテンプレート。
-すべての開発ワークフローは `mise` 経由で実行する。
+開発ワークフローは `mise` 経由で実行する（コンテナの起動・停止のみ `docker compose` を直接使う）。
 
 ## スタック
 
-| Layer    | Tool                              |
-| -------- | --------------------------------- |
-| Frontend | Next.js 15 (App Router) + TypeScript |
-| Backend  | FastAPI + SQLAlchemy + Alembic    |
-| DB       | PostgreSQL 16                     |
-| IaC      | Terraform 1.9 (最小雛形)           |
-| Dev      | Docker Compose                    |
-| Runtime  | mise (Node 22 / Python 3.12 / uv) |
+| Layer    | Tool                                   |
+| -------- | -------------------------------------- |
+| Frontend | Next.js 15 (App Router) + TypeScript   |
+| Backend  | FastAPI + SQLModel + Alembic           |
+| DB       | PostgreSQL 16                          |
+| IaC      | Terraform 1.9 (最小雛形)                |
+| Dev      | Docker Compose                         |
+| Runtime  | mise (Node 22 / pnpm 9 / Python 3.14 / uv) |
 
 ## ディレクトリ
 
@@ -24,7 +24,7 @@ Next.js + FastAPI + PostgreSQL + Terraform をひとつに束ねた個人用モ�
 ├── infra/
 │   └── terraform/
 ├── docker-compose.yml
-├── .mise.toml
+├── mise.toml   # モノレポのルート（各サブプロジェクトにも mise.toml がある）
 └── .env.example
 ```
 
@@ -35,17 +35,49 @@ Next.js + FastAPI + PostgreSQL + Terraform をひとつに束ねた個人用モ�
 #    https://mise.jdx.dev/getting-started.html
 brew install mise   # macOS の場合
 
-# 2. ランタイムを揃える
-mise install
+# 2. mise の設定ファイルを信頼する（サブプロジェクトの mise.toml も個別に信頼が要る）
+mise trust
+for d in apps/web apps/api infra; do (cd "$d" && mise trust); done
 
-# 3. 環境変数
+# 3. ランタイムを揃える
+#    NOTE: ランタイム（node / python / terraform）は各サブプロジェクトの mise.toml にあるため、
+#          ルートの `mise install` だけでは入らない。各ディレクトリでも実行する。
+mise install
+for d in apps/web apps/api infra; do (cd "$d" && mise install); done
+
+# 4. 環境変数（compose 用）
 cp .env.example .env
 
-# 4. 起動 (web / api / db を一括で立ち上げる)
-mise run dev
+# 5. 依存関係のインストール
+#    web: pnpm install + .env.local 作成
+#    api: uv sync + .env 作成
+#    infra: terraform init
+mise run setup
 ```
 
-立ち上がったら:
+## 起動
+
+### A. Docker Compose (web / api / db を一括)
+
+```bash
+docker compose up -d        # 起動
+docker compose logs -f      # ログ追従
+docker compose stop         # 停止 (ボリューム保持)
+docker compose down -v      # 停止 (ボリュームも削除)
+```
+
+### B. ホストで直接 (DB だけ Docker)
+
+```bash
+docker compose up -d db
+mise run dev:up             # web / api を並列起動
+```
+
+`apps/api/.env` は `mise run setup` が `apps/api/.env.example` から作る（接続先は `localhost`）。
+
+### エンドポイント
+
+A / B どちらでも同じポートで立ち上がる。
 
 - Web:        http://localhost:3000
 - API docs:   http://localhost:8080/docs
@@ -53,55 +85,43 @@ mise run dev
 
 ## 初回マイグレーション
 
-別ターミナルで:
-
 ```bash
-mise run api:migrate
+mise run //apps/api:db:migrate
 ```
 
 `items` テーブルが作成され、Web 画面から item を追加できるようになる。
+A（Compose）の場合もマイグレーションはホストから実行する（`localhost:5432` の db に対して流れる）。
 
-## よく使うタスク
+## タスク一覧
 
-```bash
-mise run dev              # docker compose up
-mise run down             # 停止 (ボリュームも削除)
-mise run stop             # 停止 (ボリューム保持)
-mise run logs             # ログ追従
-
-mise run install          # web / api の依存をホスト側にインストール
-mise run web:dev          # Next.js を単独起動 (Docker を使わない)
-mise run api:dev          # FastAPI を単独起動
-
-mise run api:migrate      # Alembic upgrade head
-mise run api:revision -- -m "msg"   # 新規マイグレーション
-
-mise run lint             # 全体 lint
-mise run format           # 全体 format
-
-mise run tf:init / tf:plan / tf:apply
-```
-
-## アプリ単体で動かす場合
-
-Docker を使わずホスト側で動かしたいとき:
+`mise tasks --all` で全タスクを確認できる。主なもの:
 
 ```bash
-# DB だけ Docker で立ち上げる
-docker compose up -d db
+# 横断 (ルート)
+mise run setup                                  # 全サブプロジェクトのセットアップ
+mise run check                                  # 全サブプロジェクトの品質チェック (alias: qa)
+mise run dev:up                                 # web / api を並列起動
 
-# API
-cd apps/api
-cp .env.example .env   # DATABASE_URL を localhost に書き換え済み
-uv sync
-uv run alembic upgrade head
-uv run fastapi dev src/main.py
+# apps/web
+mise run //apps/web:dev                         # Next.js 開発サーバー
+mise run //apps/web:build                       # プロダクションビルド
+mise run //apps/web:check                       # lint + typecheck + format:check
+mise run //apps/web:format                      # Prettier で整形
 
-# Web (別ターミナル)
-cd apps/web
-pnpm install
-pnpm dev
+# apps/api
+mise run //apps/api:dev                         # FastAPI 開発サーバー (ホットリロード)
+mise run //apps/api:check                       # ruff + pyright + pytest
+mise run //apps/api:format                      # ruff format
+mise run //apps/api:db:migrate                  # alembic upgrade head
+mise run //apps/api:db:migrate:generate -- "msg"  # 新規マイグレーションを自動生成
+mise run //apps/api:db:migrate:rollback         # 1 つ戻す
+
+# infra
+mise run //infra:check                          # terraform fmt -check + validate
+mise run //infra:plan                           # terraform plan
 ```
+
+サブディレクトリの中では `//apps/api:` などの接頭辞を省いて `mise run dev` のように実行できる。
 
 ## クラウドへデプロイするには
 
