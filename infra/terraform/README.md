@@ -5,9 +5,9 @@
 ## 使い方
 
 ```bash
-mise run tf:init
-mise run tf:plan
-mise run tf:apply
+mise run //infra:init
+mise run //infra:plan
+cd infra/terraform && terraform apply   # mise 経由では確認プロンプトに応答できないため直接実行する
 ```
 
 ## クラウドに差し替える手順

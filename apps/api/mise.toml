@@ -27,11 +27,11 @@ run = """
 
 [tasks.dev]
 description = "FastAPI 開発サーバーを起動（ホットリロード有効）"
-run = "uv run fastapi dev src/main.py"
+run = "uv run fastapi dev src/main.py --port 8080"
 
 [tasks.start]
 description = "プロダクションサーバーを起動"
-run = "uv run fastapi run src/main.py"
+run = "uv run fastapi run src/main.py --port 8080"
 
 [tasks.test]
 description = "pytest でテストを実行"
