@@ -1,11 +1,13 @@
+# NOTE: pnpm の版は package.json の packageManager / apps/web/mise.toml と整合させること（patch まで固定）
 FROM node:22-alpine AS deps
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
-COPY package.json pnpm-lock.yaml* ./
-RUN pnpm install --frozen-lockfile || pnpm install
+COPY package.json pnpm-lock.yaml ./
+# フォールバックを置かない。lockfile とずれていたらビルドを落とす
+RUN pnpm install --frozen-lockfile
 
 FROM node:22-alpine AS builder
-RUN corepack enable && corepack prepare pnpm@9 --activate
+RUN corepack enable && corepack prepare pnpm@9.15.9 --activate
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .

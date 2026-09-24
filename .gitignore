@@ -20,6 +20,10 @@ out/
 build/
 dist/
 *.tsbuildinfo
+# NOTE: Next.js 16 は dev / build で参照先が変わる（.next/dev/types と .next/types）ため
+#       追跡すると差分が往復する。create-next-app の既定に合わせて追跡しない。
+#       clean checkout では `pnpm exec next typegen` で生成してから lint / typecheck する。
+next-env.d.ts
 .pnpm-store/
 npm-debug.log*
 pnpm-debug.log*

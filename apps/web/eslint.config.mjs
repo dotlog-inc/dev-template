@@ -1,14 +1,14 @@
-import { dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { FlatCompat } from "@eslint/eslintrc";
+import { defineConfig, globalIgnores } from "eslint/config";
+import nextCoreWebVitals from "eslint-config-next/core-web-vitals";
+import nextTypeScript from "eslint-config-next/typescript";
+import prettier from "eslint-config-prettier";
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-
-const compat = new FlatCompat({ baseDirectory: __dirname });
-
-const config = [
-  ...compat.extends("next/core-web-vitals", "next/typescript", "prettier"),
-];
-
-export default config;
+// NOTE: Next.js 16 で `next lint` は削除されたため、eslint-config-next の
+// flat config を直接読む（FlatCompat 不要）。prettier は競合ルールを
+// 落とすだけなので必ず最後に置く。
+export default defineConfig([
+  ...nextCoreWebVitals,
+  ...nextTypeScript,
+  prettier,
+  globalIgnores([".next/**", "next-env.d.ts"]),
+]);
