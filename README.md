@@ -10,7 +10,7 @@ Next.js + FastAPI + PostgreSQL + Terraform をひとつに束ねた個人用モ�
 | Frontend | Next.js 15 (App Router) + TypeScript   |
 | Backend  | FastAPI + SQLModel + Alembic           |
 | DB       | PostgreSQL 16                          |
-| IaC      | Terraform 1.9 (最小雛形)                |
+| IaC      | Terraform 1.16 (最小雛形)               |
 | Dev      | Docker Compose                         |
 | Runtime  | mise (Node 22 / pnpm 9 / Python 3.14 / uv) |
 

@@ -25,3 +25,5 @@ cd infra/terraform && terraform apply   # mise 経由では確認プロンプト
 - `variables.tf` — 入力変数
 - `main.tf` — リソース定義 (現在: プレースホルダ)
 - `outputs.tf` — 出力値
+- `tests/` — `terraform test`（実クラウドを呼ばない。`mise run //infra:check` が実行する）
+- `.terraform.lock.hcl` — provider の版の固定（**コミットする**）

@@ -55,8 +55,8 @@ run = "uv run ruff format --check ."
 
 [tasks.check]
 alias = "qa"
-description = "lint・型チェック・テストを実行"
-depends = [":lint", ":typecheck", ":test"]
+description = "lint・型チェック・フォーマットチェック・テストを実行"
+depends = [":lint", ":typecheck", ":format:check", ":test"]
 
 [tasks."db:migrate"]
 description = "マイグレーションを実行"
