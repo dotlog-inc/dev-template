@@ -3,8 +3,11 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.config import settings
 from src.routes import health, items
+from src.schema_guard import schema_lifespan
 
-app = FastAPI(title="dev-template API")
+# **起動時に DB の版を確かめる**（`src/schema_guard.py`）。移行の流し忘れはここで起動ごと止まり、
+# 起動に失敗した revision へは traffic が移らない
+app = FastAPI(title="dev-template API", lifespan=schema_lifespan)
 
 app.add_middleware(
     CORSMiddleware,

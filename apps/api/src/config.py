@@ -12,6 +12,10 @@ class Settings(BaseSettings):
     migration_database_url: str = (
         "postgresql+psycopg://devtemplate_migrator:devtemplate_migrator@localhost:5432/devtemplate"
     )
+    # この環境が繋いでよい DB のホスト（#30）。カンマ区切り。**空は「手元の DB だけ」**で、
+    # 本番だけが自分の DB ホストを名乗る。打ち消しフラグにしないのは、立て忘れが素通りになるため。
+    # 判定は `src/db_guard.py`、掛かるのは `src/db.py` を通る経路だけ（alembic は通らない）
+    db_allowed_hosts: str = ""
     cors_origins: str = "http://localhost:3000"
 
     @field_validator("cors_origins")

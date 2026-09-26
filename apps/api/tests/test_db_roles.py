@@ -81,6 +81,18 @@ def test_the_app_role_cannot_write_the_migration_version(app_engine: Engine) -> 
         conn.execute(text("UPDATE alembic_version SET version_num = '0000'"))
 
 
+def test_the_app_role_can_read_the_migration_version(app_engine: Engine) -> None:
+    """
+    起動時の版の検査（`src/schema_guard.py`）がアプリ用の接続で版を読む。
+
+    0002 が SELECT だけを返している。剥がれるとアプリは «判定できない» として起動を拒む。
+    """
+    with app_engine.connect() as conn:
+        version = conn.execute(text("SELECT version_num FROM alembic_version")).scalar_one()
+
+    assert version
+
+
 def test_the_migrator_role_owns_the_tables(migrator_engine: Engine) -> None:
     """所有者が別ロールだと DDL のたびに権限の付け替えが要る。ここが崩れると 0000 の既定権限も効かない"""
     with migrator_engine.connect() as conn:
