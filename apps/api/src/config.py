@@ -5,7 +5,13 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", case_sensitive=False, extra="ignore")
 
-    database_url: str = "postgresql+psycopg://app:app@localhost:5432/app"
+    # アプリ用。DML だけを持ち、DDL は実行できないロール
+    database_url: str = "postgresql+psycopg://devtemplate_app:devtemplate_app@localhost:5432/devtemplate"
+    # マイグレーション用。テーブル所有者となり DDL を実行するロール。
+    # **ランタイム（api）へは渡さない** —— プロセスが所有者権限を持つと分離がプロセス内で消える
+    migration_database_url: str = (
+        "postgresql+psycopg://devtemplate_migrator:devtemplate_migrator@localhost:5432/devtemplate"
+    )
     cors_origins: str = "http://localhost:3000"
 
     @field_validator("cors_origins")

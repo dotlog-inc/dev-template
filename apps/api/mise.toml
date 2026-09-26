@@ -34,8 +34,13 @@ description = "プロダクションサーバーを起動"
 run = "uv run fastapi run src/main.py --port 8080"
 
 [tasks.test]
-description = "pytest でテストを実行"
+description = "pytest でテストを実行（DB 不要のものだけ）"
 run = "uv run pytest"
+
+[tasks."test:db"]
+description = "DB が要るテストを実行（docker compose up -d db とマイグレーション済みを前提とする）"
+# pyproject の addopts が `-m "not db"` を入れているため、ここで後勝ちの -m を渡す
+run = "uv run pytest -m db"
 
 [tasks.lint]
 description = "ruff でコードチェック"

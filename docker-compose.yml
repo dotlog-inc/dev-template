@@ -3,15 +3,24 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${POSTGRES_USER:-app}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-app}
-      POSTGRES_DB: ${POSTGRES_DB:-app}
+      # superuser。初期化とバックアップ以外では使わない
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-postgres}
+      POSTGRES_DB: ${POSTGRES_DB:-devtemplate}
+      # 01- が作るロールのパスワード（ローカルのみ。本番は秘密管理側に置く）
+      APP_PASSWORD: ${APP_PASSWORD:-devtemplate_app}
+      MIGRATOR_PASSWORD: ${MIGRATOR_PASSWORD:-devtemplate_migrator}
     ports:
       - "${POSTGRES_PORT:-5432}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
+      # initdb.d はファイル名順に実行される。実行順はこのマウント先の 01- / 02- だけで表す。
+      # **ボリュームを新規に作ったときだけ走る。** 既存のボリュームには適用されないため、
+      # ロールを変えたときは docker compose down -v が必要（README「既存環境からの移行」）
+      - ./infra/sql/local/create-roles.sh:/docker-entrypoint-initdb.d/01-create-roles.sh:ro
+      - ./infra/sql/bootstrap-grants.sql:/docker-entrypoint-initdb.d/02-bootstrap-grants.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-app} -d ${POSTGRES_DB:-app}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-devtemplate}"]
       interval: 5s
       timeout: 5s
       retries: 10
@@ -22,7 +31,9 @@ services:
       dockerfile: Dockerfile.dev
     restart: unless-stopped
     environment:
-      DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-app}:${POSTGRES_PASSWORD:-app}@db:5432/${POSTGRES_DB:-app}
+      # **MIGRATION_DATABASE_URL は渡さない。** ランタイムのプロセスが所有者権限の資格情報を
+      # 持つと接続の分離がプロセス内で消える。マイグレーションはホストから実行する
+      DATABASE_URL: postgresql+psycopg://${POSTGRES_DB:-devtemplate}_app:${APP_PASSWORD:-devtemplate_app}@db:5432/${POSTGRES_DB:-devtemplate}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000}
     ports:
       - "${API_PORT:-8080}:8080"

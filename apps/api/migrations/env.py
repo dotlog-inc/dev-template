@@ -8,7 +8,8 @@ from src.config import settings
 from src.models import *  # noqa: F403  (テーブル定義を import して SQLModel.metadata に登録)
 
 config = context.config
-config.set_main_option("sqlalchemy.url", settings.database_url)
+# DDL を流すので所有者ロールの接続を使う（アプリ用ロールでは CREATE できない）
+config.set_main_option("sqlalchemy.url", settings.migration_database_url)
 
 # CLI（`mise run db:migrate`）から来たときだけログを設定する。
 # `fileConfig` はプロセス全体の logging を alembic.ini の内容で置き換えるため、

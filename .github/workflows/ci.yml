@@ -156,20 +156,22 @@ jobs:
     env:
       UV_CACHE_DIR: ${{ github.workspace }}/.uv-cache
       # apps/api/.env.example と同じ形にする。ホストとポートだけが違う
-      DATABASE_URL: postgresql+psycopg://app:app@localhost:5432/app
+      DATABASE_URL: postgresql+psycopg://devtemplate_app:devtemplate_app@localhost:5432/devtemplate
+      MIGRATION_DATABASE_URL: postgresql+psycopg://devtemplate_migrator:devtemplate_migrator@localhost:5432/devtemplate
     # マイグレーションは実 Postgres でしか検証できない。compose と同じイメージに固定し、
     # ローカルと CI で挙動を揃える
     services:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: app
-          POSTGRES_PASSWORD: app
-          POSTGRES_DB: app
+          # superuser。ロール作成と権限付与にだけ使う。アプリ用の接続には使わない
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: devtemplate
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U app -d app"
+          --health-cmd "pg_isready -U postgres -d devtemplate"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -201,6 +203,21 @@ jobs:
           uv export --locked --no-emit-project -o "$RUNNER_TEMP/requirements.txt"
           uvx pip-audit --disable-pip -r "$RUNNER_TEMP/requirements.txt"
 
+      # compose の initdb.d が流すのと同じスクリプトをそのまま使う。CI 用に SQL を書き写すと
+      # ロール構成がローカルと静かにずれ、「ローカルでは緑なのに CI だけ落ちる」が起きる
+      - name: DB ロールと権限を用意する
+        working-directory: .
+        env:
+          PGHOST: localhost
+          PGPASSWORD: postgres
+          POSTGRES_USER: postgres
+          POSTGRES_DB: devtemplate
+          APP_PASSWORD: devtemplate_app
+          MIGRATOR_PASSWORD: devtemplate_migrator
+        run: |
+          ./infra/sql/local/create-roles.sh
+          psql -v ON_ERROR_STOP=1 -U postgres -d devtemplate -f infra/sql/bootstrap-grants.sql
+
       # 手元と同じコマンドでマイグレーションが通ることを確かめる
       - name: マイグレーションを適用する
         run: mise run db:migrate
@@ -208,6 +225,11 @@ jobs:
       # //apps/api:check = ruff + pyright + pytest（ローカルの mise run check と同一）
       - name: 品質チェック
         run: mise run check
+
+      # ロールの分離が効いていることは実 PostgreSQL でしか検証できない。
+      # 既定の pytest からは外してあるので（pyproject の addopts）、ここで別に流す
+      - name: DB が要るテスト
+        run: mise run test:db
 
       - name: キャッシュを整理
         run: uv cache prune --ci
