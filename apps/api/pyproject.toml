@@ -14,7 +14,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     # NOTE: ruff の select = ["ALL"] は新ルール追加で lint が壊れ得るため互換リリースに固定する
-    "ruff~=0.15.4",
+    "ruff>=0.15.4,<0.17.0",
     "pyright>=1.1",
     "pytest>=8.0",
 ]
