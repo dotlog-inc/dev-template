@@ -10,7 +10,11 @@ from src.models import *  # noqa: F403  (テーブル定義を import して SQL
 config = context.config
 config.set_main_option("sqlalchemy.url", settings.database_url)
 
-if config.config_file_name is not None:
+# CLI（`mise run db:migrate`）から来たときだけログを設定する。
+# `fileConfig` はプロセス全体の logging を alembic.ini の内容で置き換えるため、
+# pytest から呼ぶと pytest 側のログ設定まで巻き込む。
+# 呼び出し側が configure_logger=False を渡したときは触らない。
+if config.config_file_name is not None and config.attributes.get("configure_logger", True):
     fileConfig(config.config_file_name)
 
 target_metadata = SQLModel.metadata

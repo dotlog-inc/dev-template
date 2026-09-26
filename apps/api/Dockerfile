@@ -36,6 +36,10 @@ COPY --from=builder /app/alembic.ini ./alembic.ini
 COPY --from=builder /app/migrations/ ./migrations/
 COPY --from=builder /app/src/ ./src/
 
+# 実行時に書き込むパスは無い（ログは stdout）ので chown は要らない。root 所有のまま読むだけ
+RUN groupadd --system app && useradd --system --gid app --no-create-home app
+USER app
+
 EXPOSE 8080
 
 CMD ["fastapi", "run", "src/main.py", "--host", "0.0.0.0", "--port", "8080"]

@@ -49,7 +49,14 @@ venv/
 crash.log
 *.tfvars
 !*.tfvars.example
-.terraform.lock.hcl
+# terraform plan -out の保存先。変数の値が平文で入るためコミットしない
+tfplan
+*.tfplan
+# NOTE: .terraform.lock.hcl は **コミットする**（HashiCorp 推奨。provider の版を固定する）。
+#       ここで無視すると、実行する人ごとに provider の版が変わる。
 
 # Docker
 .docker/
+
+# Claude Code のレビューレポート（/review-report の出力。作業成果物なので残さない）
+.claude/reviews/

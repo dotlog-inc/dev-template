@@ -1,17 +1,27 @@
 # infra/mise.toml
 
 [tools]
-# NOTE: terraform/backend.tf の required_version (>= 1.9) と整合させること
-terraform = "1.9"
+# NOTE: terraform/backend.tf の required_version (>= 1.11) 以上であること
+terraform = "1.16"
 
 [tasks.setup]
-description = "Terraform 作業ディレクトリを初期化"
-depends = [":init"]
+description = "Terraform 作業ディレクトリを初期化（backend には接続しない）"
+# ルートの `mise run setup` から呼ばれるため、クラウド認証を要求しない :validate に依存させる。
+# backend 付きの初期化は `mise run //infra:init` を明示的に実行する。
+depends = [":validate"]
 
 [tasks.check]
 alias = "qa"
-description = "Terraform のフォーマットと設定を検証"
-depends = [":format:check", ":validate"]
+description = "Terraform のフォーマット・設定・テストを検証"
+depends = [":format:check", ":test"]
+
+# :validate に依存させる。**並列で走らせない** —— test も validate も同じ
+# `terraform/.terraform` を初期化するため、同時に走ると provider の取得が競合する
+[tasks.test]
+description = "Terraform の test（実クラウドを呼ばない）"
+depends = [":validate"]
+dir = "terraform"
+run = "terraform test"
 
 [tasks.init]
 description = "Terraform を初期化"
@@ -29,10 +39,12 @@ dir = "terraform"
 run = "terraform fmt -recursive -check"
 
 [tasks.validate]
-description = "Terraform 設定を検証"
-depends = [":init"]
+description = "Terraform 設定を検証（backend に接続しないので bootstrap 前でも動く）"
 dir = "terraform"
-run = "terraform validate"
+run = """
+  terraform init -backend=false -input=false >/dev/null
+  terraform validate
+"""
 
 [tasks.plan]
 description = "Terraform plan を実行"
@@ -41,7 +53,9 @@ dir = "terraform"
 run = "terraform plan"
 
 [tasks.apply]
-description = "Terraform apply を実行"
+# mise はタスクに stdin を繋がないため、terraform apply の確認プロンプトに応答できず
+# `error asking for approval: EOF` で必ず落ちる。`cd terraform && terraform apply` を使うこと
+description = "【使用不可】mise 経由では確認プロンプトに応答できない。terraform apply を直接実行する"
 depends = [":init"]
 dir = "terraform"
 run = "terraform apply"
