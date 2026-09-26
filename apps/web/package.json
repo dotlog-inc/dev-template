@@ -16,7 +16,7 @@
     "format:check": "prettier --check . --cache --cache-strategy content"
   },
   "dependencies": {
-    "next": "^16.3.5",
+    "next": "^16.3.6",
     "react": "^19.3.0",
     "react-dom": "^19.3.0"
   },
@@ -25,7 +25,7 @@
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "^16.3.5",
+    "eslint-config-next": "^16.3.6",
     "eslint-config-prettier": "^10",
     "prettier": "^3",
     "typescript": "^5"
