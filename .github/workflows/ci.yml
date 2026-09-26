@@ -111,7 +111,7 @@ jobs:
       - name: Next.js の型を生成
         run: pnpm exec next typegen
 
-      # 品質チェックのツール別キャッシュ（eslint / prettier は package.json の --cache、
+      # 品質チェックのツール別キャッシュ（eslint / prettier / knip は package.json の --cache、
       # tsc は tsconfig の incremental が書く tsbuildinfo）。どれも中身のハッシュで判定するので、
       # checkout で mtime が変わっても効く。キーに sha を入れて毎回最新を保存し、
       # 依存を上げたら使い回さない
@@ -121,12 +121,14 @@ jobs:
           path: |
             apps/web/node_modules/.cache/eslint
             apps/web/node_modules/.cache/prettier
+            apps/web/node_modules/.cache/knip
             apps/web/tsconfig.tsbuildinfo
           key: web-check-${{ runner.os }}-${{ hashFiles('apps/web/pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
             web-check-${{ runner.os }}-${{ hashFiles('apps/web/pnpm-lock.yaml') }}-
 
-      # //apps/web:check = lint + typecheck + format:check（ローカルの mise run check と同一）
+      # //apps/web:check = lint + stylelint + typecheck + format:check + knip + test
+      # （ローカルの mise run check と同一）
       - name: 品質チェック
         run: mise run check
 

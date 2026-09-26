@@ -37,9 +37,24 @@ run = "pnpm start"
 description = "ESLint でコードチェック"
 run = "pnpm lint"
 
+[tasks.stylelint]
+description = "stylelint で CSS をチェック（!important の禁止）"
+# 規則は declaration-no-important 1 つだけ。詳細度負けで宣言が黙って捨てられる罠を
+# 機械で止めるのが目的で、一般的な整形の指摘は入れていない
+run = "pnpm run stylelint"
+
+[tasks.test]
+description = "vitest でユニットテストを実行"
+run = "pnpm test"
+
 [tasks.typecheck]
 description = "TypeScript の型チェック"
 run = "pnpm run typecheck"
+
+[tasks.knip]
+description = "未使用のファイル・export・依存を検出"
+# NOTE: knip 6 は Node ^20.19 || >=22.12 が必要。[tools] の node = "22" が前提。
+run = "pnpm run knip"
 
 [tasks.format]
 description = "Prettier でコードをフォーマット"
@@ -51,8 +66,8 @@ run = "pnpm run format:check"
 
 [tasks.check]
 alias = "qa"
-description = "lint・型チェック・フォーマットチェックを実行"
-depends = [":lint", ":typecheck", ":format:check"]
+description = "lint・CSS チェック・型チェック・フォーマットチェック・未使用検出・テストを実行"
+depends = [":lint", ":stylelint", ":typecheck", ":format:check", ":knip", ":test"]
 
 [tasks.clean]
 description = "ビルド成果物とキャッシュを削除"
