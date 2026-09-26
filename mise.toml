@@ -1,4 +1,4 @@
-experimental_monorepo_root = true
+monorepo_root = true
 
 [monorepo]
 config_roots = ["apps/web", "apps/api", "infra"]
@@ -6,15 +6,56 @@ config_roots = ["apps/web", "apps/api", "infra"]
 [settings]
 experimental = true
 
+# ルート直下で使う横断ツール。ランタイム（node / python / terraform）は
+# 各サブプロジェクトの mise.toml 側にある。
+[tools]
+# pre-commit（.githooks/pre-commit）と CI（ci.yml の secrets job）が同じ版を見るための単一ソース。
+# 版が食い違うと「手元は通るのに CI で落ちる」が起きる
+gitleaks = "8.30.1"
+
 [tasks.setup]
 description = "全サブプロジェクトのセットアップ"
-depends = ["//apps/web:setup", "//apps/api:setup", "//infra:setup"]
+depends = ["hooks:install", "//apps/web:setup", "//apps/api:setup", "//infra:setup"]
+# サブの setup が .env を作った「後」に見る必要があるので depends_post。
+# --warn-only なのは、セットアップを止めずに気付かせるため
+depends_post = ["env:check:warn"]
 
 [tasks.check]
 alias = "qa"
 description = "全サブプロジェクトの品質チェックを実行"
-depends = ["//apps/web:check", "//apps/api:check", "//infra:check"]
+depends = ["//apps/web:check", "//apps/api:check", "//infra:check", "env:check"]
 
 [tasks."dev:up"]
 description = "web・api を並列起動"
 run = "mise run //apps/web:dev & mise run //apps/api:dev & wait"
+
+# .env は gitignore 済みで、setup は「無いときだけ」コピーする。.env.example にキーが
+# 増えても既存の .env は古いまま残り、症状は .env から遠い場所（DB へ繋がらない等）で出る
+[tasks."env:check"]
+description = "手元の .env が .env.example のキーに追従しているか検査する"
+run = "./scripts/check-env.sh"
+
+[tasks."env:check:warn"]
+description = "env:check を警告として実行する（setup から呼ぶ。不足があっても止めない）"
+hide = true
+run = "./scripts/check-env.sh --warn-only"
+
+# --redact: 生の値をログに出さない。Actions のログや端末の履歴に秘密を増やさないため
+# --verbose: 検出時にファイル・行・ルール・fingerprint を出す。
+#            これが無いと「leaks found: 1」しか出ず、どこを直せばいいか分からない
+[tasks."secrets:scan"]
+description = "全履歴から秘密を検出（CI の secrets job と同一）"
+run = "gitleaks git . --redact --verbose --no-banner"
+
+[tasks."secrets:scan:staged"]
+description = "ステージ済みの差分から秘密を検出（pre-commit フックが呼ぶ）"
+run = "gitleaks git . --staged --redact --verbose --no-banner"
+
+[tasks."hooks:install"]
+description = "git のフックパスを .githooks に向ける（pre-commit で秘密を検出する）"
+# core.hooksPath は共通の .git/config に入るが、相対パスは各 worktree のトップレベル基準で
+# 解決されるため、worktree を切っても追加の設定は要らない
+run = """
+  git config core.hooksPath .githooks
+  echo "✓ core.hooksPath を .githooks に設定しました"
+"""

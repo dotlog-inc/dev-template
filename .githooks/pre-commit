@@ -1,0 +1,24 @@
+#!/usr/bin/env sh
+# ステージ済みの差分に秘密が含まれていないかを見る。
+#
+# このフックは `--no-verify` で素通しできる。止める役目の本命は CI 側
+# （.github/workflows/ci.yml の secrets job）で、ここは push 前に気づくための保険。
+#
+# 有効化: mise run hooks:install（ルートの `mise run setup` から呼ばれる）
+
+set -eu
+
+if command -v mise > /dev/null 2>&1; then
+  # mise 経由なら mise.toml の [tools] に固定した版が使われ、CI と一致する
+  exec mise run secrets:scan:staged
+fi
+
+if command -v gitleaks > /dev/null 2>&1; then
+  echo "pre-commit: mise が無いため PATH 上の gitleaks を使う（CI と版が違う可能性がある）" >&2
+  exec gitleaks git . --staged --redact --verbose --no-banner
+fi
+
+# ここで落とすと gitleaks を入れていない人が commit できなくなる。CI が本命なので通す
+echo "pre-commit: gitleaks が見つからないため秘密のスキャンを飛ばした。" >&2
+echo "            mise run setup で導入できる（CI 側では必ずスキャンされる）。" >&2
+exit 0
