@@ -1,9 +1,10 @@
 # apps/web/mise.toml
 
 [tools]
-# NOTE: Dockerfile.dev の node:22-alpine と整合させること
+# NOTE: Dockerfile / Dockerfile.dev の node:22-alpine、package.json の engines.node と整合させること
 node = "22"
-pnpm = "9"
+# NOTE: Dockerfile / Dockerfile.dev / package.json の packageManager と整合させること（patch まで固定）
+pnpm = "9.15.9"
 
 [tasks.setup]
 description = "依存関係のインストールと環境変数の設定"
@@ -65,6 +66,5 @@ run = """
 description = "node_modules を含めて完全クリーンアップ"
 run = """
   rm -rf .next node_modules
-  rm -f pnpm-lock.yaml
   echo "✓ 完全クリーンアップ完了。mise run setup を実行してください。"
 """

@@ -1,0 +1,4 @@
+# 生成物。整形すると pnpm / next が書き戻して差分が往復する
+pnpm-lock.yaml
+next-env.d.ts
+.next/

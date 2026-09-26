@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 
 type Item = {
   id: number;
@@ -8,27 +8,48 @@ type Item = {
   created_at: string;
 };
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8000";
+const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
+
+async function fetchItems(): Promise<Item[]> {
+  const res = await fetch(`${API_BASE}/items`, { cache: "no-store" });
+  if (!res.ok) throw new Error(`GET /items failed: ${res.status}`);
+  return (await res.json()) as Item[];
+}
+
+const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
   const [name, setName] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const load = useCallback(async () => {
+  const reload = async () => {
     try {
-      const res = await fetch(`${API_BASE}/items`, { cache: "no-store" });
-      if (!res.ok) throw new Error(`GET /items failed: ${res.status}`);
-      setItems(await res.json());
+      setItems(await fetchItems());
       setError(null);
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e));
+      setError(toMessage(e));
     }
-  }, []);
+  };
 
+  // setState は取得の完了後（Promise の解決時）にだけ行う。effect の本体で同期的に
+  // 呼ぶと react-hooks/set-state-in-effect に当たる。ignore は unmount 後の更新を捨てるため
   useEffect(() => {
-    void load();
-  }, [load]);
+    let ignore = false;
+    fetchItems().then(
+      (data) => {
+        if (ignore) return;
+        setItems(data);
+        setError(null);
+      },
+      (e: unknown) => {
+        if (!ignore) setError(toMessage(e));
+      },
+    );
+    return () => {
+      ignore = true;
+    };
+  }, []);
 
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,7 +61,7 @@ export default function Home() {
     });
     if (res.ok) {
       setName("");
-      await load();
+      await reload();
     } else {
       setError(`POST /items failed: ${res.status}`);
     }
