@@ -33,6 +33,10 @@ testpaths = ["tests"]
 markers = [
     "db: PostgreSQL への接続が必要（`docker compose up -d db` を前提とする）",
 ]
+# **既定では db を外す。** DB 無しでも `mise run check` が通る状態を保つ。
+# 実行するときは `mise run //apps/api:test:db`（CI は別ステップで流す）。
+# addopts はコマンドラインの前に展開されるだけで、同じ引数（-m）は後勝ちになる
+addopts = ["-m", "not db"]
 
 # ---------------------------------------------------------------------------
 # Ruff

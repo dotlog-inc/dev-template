@@ -83,6 +83,23 @@ A / B どちらでも同じポートで立ち上がる。
 - API docs:   http://localhost:8080/docs
 - API health: http://localhost:8080/health
 
+## DB のロール
+
+DB は 2 つのロールを使う。ロール名は `POSTGRES_DB` から導く。
+
+| ロール | 権限 | 使う場所 |
+| --- | --- | --- |
+| `<POSTGRES_DB>_app` | DML のみ（DDL は実行できない） | api の実行時（`DATABASE_URL`） |
+| `<POSTGRES_DB>_migrator` | テーブル所有者。DDL を実行する | alembic（`MIGRATION_DATABASE_URL`） |
+| `postgres` | superuser | 初期化とバックアップのみ |
+
+ロールの作成（`infra/sql/local/create-roles.sh`）とスキーマ権限の付与
+（`infra/sql/bootstrap-grants.sql`）は、compose の `initdb.d` が**ボリュームを新規に作ったときだけ**
+実行する。テーブルごとの DML 権限は `0000` マイグレーションの `ALTER DEFAULT PRIVILEGES` が自動で付ける。
+
+compose の api には `MIGRATION_DATABASE_URL` を渡していない。ランタイムのプロセスが所有者権限を
+持つと分離がプロセス内で消えるため、マイグレーションはホストから実行する。
+
 ## 初回マイグレーション
 
 ```bash
@@ -91,6 +108,27 @@ mise run //apps/api:db:migrate
 
 `items` テーブルが作成され、Web 画面から item を追加できるようになる。
 A（Compose）の場合もマイグレーションはホストから実行する（`localhost:5432` の db に対して流れる）。
+
+## 既存環境からの移行 (DB ロールの分離)
+
+ロールは DB の初期化時にしか作られないため、**既存のボリュームには反映されない。**
+以前の単一ロール構成（`POSTGRES_USER=app` / DB 名 `app`）から移る場合:
+
+```bash
+# 1. .env を .env.example に揃える（POSTGRES_PORT など環境固有の値は入れ直す）
+#    不足しているキーは mise run env:check が名指しする
+cp .env.example .env
+
+# 2. ボリュームを作り直す（開発データは消える）
+docker compose down -v
+docker compose up -d db
+
+# 3. マイグレーションを流す
+mise run //apps/api:db:migrate
+```
+
+`role "<db>_migrator" does not exist` が出る場合は、`.env` が古いか、`.env` の指すポートに
+別の PostgreSQL が居る（`lsof -i :5432` で確認できる）。
 
 ## タスク一覧
 
@@ -110,7 +148,8 @@ mise run //apps/web:format                      # Prettier で整形
 
 # apps/api
 mise run //apps/api:dev                         # FastAPI 開発サーバー (ホットリロード)
-mise run //apps/api:check                       # ruff + pyright + pytest
+mise run //apps/api:check                       # ruff + pyright + format:check + pytest
+mise run //apps/api:test:db                     # DB が要るテスト（要 docker compose up -d db）
 mise run //apps/api:format                      # ruff format
 mise run //apps/api:db:migrate                  # alembic upgrade head
 mise run //apps/api:db:migrate:generate -- "msg"  # 新規マイグレーションを自動生成
