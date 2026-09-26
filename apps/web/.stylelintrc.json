@@ -1,0 +1,7 @@
+{
+  "rules": {
+    "declaration-no-important": true
+  },
+  "reportDescriptionlessDisables": true,
+  "reportNeedlessDisables": true
+}

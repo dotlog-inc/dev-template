@@ -2,21 +2,7 @@
 
 import { useEffect, useState } from "react";
 
-type Item = {
-  id: number;
-  name: string;
-  created_at: string;
-};
-
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://localhost:8080";
-
-async function fetchItems(): Promise<Item[]> {
-  const res = await fetch(`${API_BASE}/items`, { cache: "no-store" });
-  if (!res.ok) throw new Error(`GET /items failed: ${res.status}`);
-  return (await res.json()) as Item[];
-}
-
-const toMessage = (e: unknown) => (e instanceof Error ? e.message : String(e));
+import { API_BASE, createItem, fetchItems, toMessage, type Item } from "@/lib/items";
 
 export default function Home() {
   const [items, setItems] = useState<Item[]>([]);
@@ -54,16 +40,12 @@ export default function Home() {
   const onSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    const res = await fetch(`${API_BASE}/items`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ name }),
-    });
-    if (res.ok) {
+    try {
+      await createItem(name);
       setName("");
       await reload();
-    } else {
-      setError(`POST /items failed: ${res.status}`);
+    } catch (err) {
+      setError(toMessage(err));
     }
   };
 

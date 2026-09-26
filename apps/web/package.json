@@ -11,7 +11,10 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint . --cache --cache-strategy content --cache-location node_modules/.cache/eslint/",
+    "stylelint": "stylelint 'src/**/*.css'",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit",
+    "knip": "knip --cache",
     "format": "prettier --write .",
     "format:check": "prettier --check . --cache --cache-strategy content"
   },
@@ -27,7 +30,11 @@
     "eslint": "^9",
     "eslint-config-next": "^16.3.5",
     "eslint-config-prettier": "^10",
+    "jsdom": "^30",
+    "knip": "^6",
     "prettier": "^3",
-    "typescript": "^5"
+    "stylelint": "^17",
+    "typescript": "^5",
+    "vitest": "^5"
   }
 }
