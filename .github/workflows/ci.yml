@@ -69,7 +69,7 @@ jobs:
 
       # apps/web/mise.toml の [tools]（node 22 / pnpm 9.15.9）をそのまま使う。
       # バージョンの単一ソースは mise.toml 側に置き、workflow では宣言しない。
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
         with:
           working_directory: apps/web
 
@@ -179,7 +179,7 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # apps/api/mise.toml の [tools]（python / uv）をそのまま使う
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
         with:
           working_directory: apps/api
 
@@ -248,7 +248,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
         with:
           working_directory: infra
 
@@ -277,7 +277,7 @@ jobs:
           fetch-depth: 0
 
       # ルートの mise.toml の [tools]（gitleaks）を使う。pre-commit と同じ版になる
-      - uses: jdx/mise-action@c2a87611a18de5b3828c5652fe268e992400cb5c # v4.3.0
+      - uses: jdx/mise-action@7a4e45a543138629540c9a1616d08632b893e492 # v5.0.1
 
       # 検出結果は artifact に残さない。秘密の生値を成果物として置き直すことになるため
       # （タスク側で --redact 済み）。どのコミットかはログの fingerprint で追える
